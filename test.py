@@ -75,7 +75,7 @@ k = Coordinate(0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD6
 r = CurveP256.multiply_k_p(k.coord, CurveP256.GENERATOR).x.coord % CurveP256.ORDER
 print("My r: ", r)
 print("Exp   ", 0xEFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716)
-
+assert r == 0xEFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716
 
 def invvv(x):
     result = 1
@@ -87,28 +87,27 @@ def invvv(x):
 
 
 message = "sample".encode("ascii")
-h = SHA256.new(data=message).digest()
 h = hashlib.sha256(b"sample").digest()
-print("hash", int.from_bytes(h, byteorder='little'))
 hh = int.from_bytes(h, byteorder='big') % CurveP256.ORDER
-print("HH is {}".format(hex(hh)))
 keyPair.private = 0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721
-keyPair.public = Point(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6,
-                       0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299)
-kp = invvv(0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60)
-assert r == 0xEFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716
-## s = (kp * (hh + Coordinate(keyPair.private) * Coordinate(r))).coord % CurveP256.ORDER
-# s = ((kp * (hh + keyPair.private * r)) % Coordinate.P256) % CurveP256.ORDER
-
+kp = invvv(k.coord)
 s = (kp * (hh + (keyPair.private * r) % CurveP256.ORDER) % CurveP256.ORDER)
-
-
-
-print("Q: ", hex(CurveP256.ORDER), k.coord*kp % CurveP256.ORDER)
 print("S is:", hex(s))
-print("Targ    F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8")
-# Target is    s = F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8
-#s = (h + x * r) / k mod q
+print("S Targ  F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8")
+assert s == 0xF7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8
 
 
+print("9. Verify")
+keyPair.public = Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6),
+                       Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299))
+
+w = invvv(s)
+u1 = (hh * w) % CurveP256.ORDER
+u2 = (r*w) % CurveP256.ORDER
+vA = CurveP256.multiply_k_p(u1, CurveP256.GENERATOR)
+vB = CurveP256.multiply_k_p(u2, keyPair.public)
+# v = ((vA + vB).x.coord % Coordinate.P256) % CurveP256.ORDER  ############# put curve add here!!!!!!!!!!!!!
+v = CurveP256.add(vA, vB).x.coord % CurveP256.ORDER
+print("v is: ", v)
+assert v == r
 
