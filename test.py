@@ -2,7 +2,7 @@
 
 import random, hashlib
 from Crypto.Hash import SHA256  # pycryptodome
-from ecdsa import Coordinate, CurveP256, KeyPair, Point
+from ecdsa import Coordinate, CurveP256, ECDSA, KeyPair, Point
 
 print("1. Testing coordinate inverse function")
 for index in range(100):
@@ -63,11 +63,12 @@ assert z.x.coord == 0xfbcea7c2827e0e8085d7707b23a3728823ea6f4878b24747fb4fd2842d
 assert z.y.coord == 0x2393c85f1f710c5afc115a39ba7e18abe03f19c9d4bb3d47d19468b818efa535
 
 print("6. Generate key pair")
-keyPair = KeyPair()
+keyPair = ECDSA(CurveP256).generate_keypair()
 print(keyPair)
 
 print("7. Generate k, kp")
-k, kp = Coordinate.get_k_kp()
+####ecdsa = ECDSA(CurveP256)
+k, kp = CurveP256.get_k_kp()
 print(k, kp)
 
 print("8. Sign...")
@@ -89,7 +90,7 @@ def invvv(x):
 message = "sample".encode("ascii")
 h = hashlib.sha256(b"sample").digest()
 hh = int.from_bytes(h, byteorder='big') % CurveP256.ORDER
-keyPair.private = 0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721
+keyPair = KeyPair(private=0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721, public=None)
 kp = invvv(k.coord)
 s = (kp * (hh + (keyPair.private * r) % CurveP256.ORDER) % CurveP256.ORDER)
 print("S is:", hex(s))
@@ -98,16 +99,26 @@ assert s == 0xF7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8
 
 
 print("9. Verify")
-keyPair.public = Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6),
-                       Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299))
+keyPair = KeyPair(public=Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6),
+                               Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299)),
+                  private=None)
 
 w = invvv(s)
 u1 = (hh * w) % CurveP256.ORDER
 u2 = (r*w) % CurveP256.ORDER
 vA = CurveP256.multiply_k_p(u1, CurveP256.GENERATOR)
 vB = CurveP256.multiply_k_p(u2, keyPair.public)
-# v = ((vA + vB).x.coord % Coordinate.P256) % CurveP256.ORDER  ############# put curve add here!!!!!!!!!!!!!
 v = CurveP256.add(vA, vB).x.coord % CurveP256.ORDER
 print("v is: ", v)
 assert v == r
 
+print("\n\n10. My sign")
+ecdsa = ECDSA(CurveP256)
+keyPair = KeyPair(public=Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6),
+                               Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299)),
+                  private=0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721)
+k = 0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60
+r, s = ecdsa.sign(b'sample', keyPair.private, k)
+print(r, hex(s))
+
+ecdsa.verify(b'sample', keyPair.public, r, s)

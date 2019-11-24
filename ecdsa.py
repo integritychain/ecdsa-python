@@ -2,11 +2,8 @@
 
 # See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
 
-import secrets
-
-# TODO:
-#  2. Put into github once it works
-#  3. Implement ECDSA!
+import hashlib, secrets
+from collections import namedtuple
 
 
 class Coordinate:
@@ -32,22 +29,9 @@ class Coordinate:
         return result
 
     #  2. B.5.1 Per-Message Secret Number Generation Using Extra Random Bits
-    @classmethod
-    def get_k_kp(cls):
-        c = secrets.randbits(256+64)
-        k = Coordinate(c % (CurveP256.ORDER - 1) + 1)
-        kp = cls.inv(k)
-        t = (k * kp).coord
-        assert (k * kp).coord == 1
-        return k, kp
 
 
-class Point:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-    def __repr__(self): return "x={:d} y={:d}".format(self.x.coord, self.y.coord)
+Point = namedtuple('Point', 'x y')
 
 
 class CurveP256:
@@ -82,14 +66,57 @@ class CurveP256:
             p = CurveP256.double(p)
         return accumulator
 
+    @classmethod
+    def invvv(cls, x):
+        result = 1
+        for bit in bin(CurveP256.ORDER - 2)[::-1]:
+            if bit == '1':
+                result = (result * x) % CurveP256.ORDER
+            x = (x * x) % CurveP256.ORDER
+        return result
 
-#  1. B.4.1 Key Pair Generation Using Extra Random Bits
-class KeyPair:
-    def __init__(self):
+    @classmethod
+    def get_k_kp(cls):
         c = secrets.randbits(256+64)
-        self.private = (c % (CurveP256.ORDER - 1)) + 1
-        self.public = CurveP256.multiply_k_p(self.private, CurveP256.GENERATOR)
+        k = c % (cls.ORDER - 1) + 1
+        kp = cls.invvv(k)
+        assert k * kp % cls.ORDER == 1
+        return k, kp
 
 
+KeyPair = namedtuple('KeyPair', 'public private')
 
 
+class ECDSA:
+
+    def __init__(self, curve):
+        self.curve = curve  # To provide constants
+
+    #  1. B.4.1 Key Pair Generation Using Extra Random Bits
+    def generate_keypair(self):
+        c = secrets.randbits(256+64)
+        private = (c % (self.curve.ORDER - 1)) + 1
+        public = CurveP256.multiply_k_p(private, self.curve.GENERATOR)
+        keypair = KeyPair(public=public, private=private)
+        return keypair
+
+    def sign(self, message, privateKey, k=None):
+        z = hashlib.sha256(message).digest()
+        zint = int.from_bytes(z, byteorder='big') % self.curve.ORDER
+        if k is None: k, kp = self.curve.get_k_kp()
+        else: kp = self.curve.invvv(k)
+        r = self.curve.multiply_k_p(k, self.curve.GENERATOR).x.coord % self.curve.ORDER
+        s = (kp * (zint + (privateKey * r) % self.curve.ORDER) % self.curve.ORDER)
+        return r, s
+
+    def verify(self, message, publicKey, r, s):
+        z = hashlib.sha256(message).digest()
+        zint = int.from_bytes(z, byteorder='big') % self.curve.ORDER
+        w = self.curve.invvv(s)
+        u1 = (zint * w) % CurveP256.ORDER
+        u2 = (r * w) % CurveP256.ORDER
+        vA = CurveP256.multiply_k_p(u1, CurveP256.GENERATOR)
+        vB = CurveP256.multiply_k_p(u2, publicKey)
+        # v = ((vA + vB).x.coord % Coordinate.P256) % CurveP256.ORDER  ############# put curve add here!!!!!!!!!!!!!
+        v = CurveP256.add(vA, vB).x.coord % CurveP256.ORDER
+        print("V {}\nr {}".format(v, r))
