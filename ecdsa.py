@@ -1,5 +1,5 @@
 # Supports ECDSA generate keys, sign and verify for P-256/SHA256, P-384/SHA384 and P-521/SHA512
-# This code prioritizes simplicity and brevity over performance and side-channel resistance.
+# This reference code prioritizes simplicity and brevity over performance and side-channel resistance.
 # It is strictly for educational purposes and should not be used in production.
 
 # See https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf
@@ -8,11 +8,9 @@ import hashlib, secrets
 from collections import namedtuple
 
 # TODO
-#  1. Remove Assertions
-#  2. Add a ton of input validations, point at infinity, CurveP256 formal name
-#  3. Comment like crazy, add NIST/RFC references
-#  5. Rewrite test1.py to more carefully test each (happy/unhappy) function
-#  6. Enhance test2.py to check against NIST
+#  1. Additional input validations, calculation checks, point at infinity, etc
+#  2. Comments with NIST/RFC references
+#  3. Safecurve checks, testing
 
 
 # Coordinate suitable for an arbitrary modulus
@@ -102,9 +100,9 @@ class ECDSA:
     def __init__(self, curve):
         self.curve = curve
 
-    def generate_keypair(self):
+    def generate_keypair(self, private=None):
         c = secrets.randbits(256+64)
-        private = (c % (self.curve.ORDER - 1)) + 1
+        if private is None: private = (c % (self.curve.ORDER - 1)) + 1
         public = self._multiply_k_p(private, self.curve.GENERATOR)
         return KeyPair(public=public, private=private)
 
@@ -128,7 +126,7 @@ class ECDSA:
         v1 = self._multiply_k_p(u1, self.curve.GENERATOR)
         v2 = self._multiply_k_p(u2, public_key)
         v = self.curve.add(v1, v2).x.coord % self.curve.ORDER
-        print(hex(r), hex(v))
+        #print(hex(r), hex(v))
         if r != v: return False
         return True
 

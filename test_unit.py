@@ -71,6 +71,7 @@ print("7. Generate k, kp")
 k, kp = ecdsa._get_k_kp()
 print(k, kp)
 
+ 
 print("8. Sign...")
 k = Coordinate(0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60, CurveP256.ORDER)
 r = ecdsa._multiply_k_p(k.coord, CurveP256.GENERATOR).x.coord % CurveP256.ORDER
