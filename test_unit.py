@@ -1,37 +1,57 @@
 #!/usr/bin/env python
 
-import random, hashlib
-from Crypto.Hash import SHA256  # pycryptodome
-from ecdsa import Coordinate, CurveP256, ECDSA, KeyPair, Point
+import random  # Deterministic is fine
+from ecdsa import Coordinate, CurveP256, ECDSA
 
-print("1. Testing coordinate inverse function")
-for index in range(100):
+
+print("1. Testing coordinate arithmetic (not pow, inv)")
+for index in range(1000):
+    a = random.getrandbits(256)
+    b = random.getrandbits(256)
+    c = random.getrandbits(256)
+    d = random.getrandbits(256)
+    e = random.getrandbits(256)
+    f = random.getrandbits(256)
+    mod = random.getrandbits(256)
+    res1 = e*((f + Coordinate(a, mod) + Coordinate(b, mod)) - Coordinate(c, mod)) * Coordinate(d, mod)
+    res2 = e*(((f + a + b) - c) * d) % mod
+    assert res1.coord == res2
+print("PASS\n")
+
+
+print("2. Testing coordinate inverse function")
+for index in range(1000):
     x1 = Coordinate(random.getrandbits(256), CurveP256.PRIME)
     x2 = Coordinate.inv(x1, CurveP256.PRIME)
     assert (x1 * x2).coord == 1
+print("PASS\n")
 
-print("2. Testing point doubling")
-g = CurveP256.GENERATOR  # Point(CurveP256.GX256, CurveP256.GY256)
+
+print("3. Testing curve point doubling")
+g = CurveP256.GENERATOR
 p2 = CurveP256.double(g)
 assert p2.x.coord == 56515219790691171413109057904011688695424810155802929973526481321309856242040
 assert p2.y.coord == 3377031843712258259223711451491452598088675519751548567112458094635497583569
-print("   g doubled: {}".format(p2))
+print("PASS\n")
 
-print("3. Testing point addition")
+
+print("4. Testing curve point addition")
 p3 = CurveP256.add(p2, g)
 assert p3.x.coord == 42877656971275811310262564894490210024759287182177196162425349131675946712428
 assert p3.y.coord == 61154801112014214504178281461992570017247172004704277041681093927569603776562
-print("   g tripled: {}".format(p3))
+print("PASS\n")
 
-print("4. Testing point multiplication")
+
+print("5. Testing point multiplication")
 ecdsa = ECDSA(CurveP256)
 x = ecdsa._multiply_k_p(5, g)
 print("   g times 5: {}".format(x))
 assert x.x.coord == 36794669340896883012101473439538929759152396476648692591795318194054580155373
 assert x.y.coord == 101659946828913883886577915207667153874746613498030835602133042203824767462820
+print("PASS\n")
 
-print("5. 10x CAVP vectors")
-# See https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Algorithm-Validation-Program/documents/dss/186-3ecdsatestvectors.zip KeyPair.rsp
+
+print("6. 10x CAVP KeyPair.rsp vectors, point multiplication")
 z = ecdsa._multiply_k_p(0xc9806898a0334916c860748880a541f093b579a9b1f32934d86c363c39800357, g)
 assert z.x.coord == 0xd0720dc691aa80096ba32fed1cb97c2b620690d06de0317b8618d5ce65eb728f
 assert z.y.coord == 0x9681b517b1cda17d0d83d335d9c4a8a9a9b0b1b3c7106d8f3c72bc5093dc275f
@@ -62,67 +82,12 @@ assert z.y.coord == 0xecd98514821bd5aaf3419ab79b71780569470e4fed3da3c1353b28fe13
 z = ecdsa._multiply_k_p(0xd40b07b1ea7b86d4709ef9dc634c61229feb71abd63dc7fc85ef46711a87b210, g)
 assert z.x.coord == 0xfbcea7c2827e0e8085d7707b23a3728823ea6f4878b24747fb4fd2842d406c73
 assert z.y.coord == 0x2393c85f1f710c5afc115a39ba7e18abe03f19c9d4bb3d47d19468b818efa535
+print("PASS\n")
 
-print("6. Generate key pair")
+
+print("7. Generate key pair, sign and verify")
 keyPair = ecdsa.generate_keypair()
-print(keyPair)
-
-print("7. Generate k, kp")
-k, kp = ecdsa._get_k_kp()
-print(k, kp)
-
- 
-print("8. Sign...")
-k = Coordinate(0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60, CurveP256.ORDER)
-r = ecdsa._multiply_k_p(k.coord, CurveP256.GENERATOR).x.coord % CurveP256.ORDER
-print("My r: ", r)
-print("Exp   ", 0xEFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716)
-assert r == 0xEFD48B2AACB6A8FD1140DD9CD45E81D69D2C877B56AAF991C34D0EA84EAF3716
-
-# def invvv(x):
-#     result = 1
-#     for bit in bin(CurveP256.ORDER - 2)[::-1]:
-#         if bit == '1':
-#             result = (result * x) % CurveP256.ORDER
-#         x = (x * x) % CurveP256.ORDER
-#     return result
-
-
-message = "sample".encode("ascii")
-h = hashlib.sha256(b"sample").digest()
-hh = int.from_bytes(h, byteorder='big') % CurveP256.ORDER
-keyPair = KeyPair(private=0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721, public=None)
-#kp = invvv(k.coord)
-kp = Coordinate.inv(k, CurveP256.ORDER).coord
-s = (kp * (hh + (keyPair.private * r) % CurveP256.ORDER) % CurveP256.ORDER)
-print("S is:", hex(s))
-print("S Targ  F7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8")
-assert s == 0xF7CB1C942D657C41D436C7A1B6E29F65F3E900DBB9AFF4064DC4AB2F843ACDA8
-
-
-print("9. Verify")
-keyPair = KeyPair(public=Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6, CurveP256.PRIME),
-                               Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299, CurveP256.PRIME)),
-                  private=None)
-
-#w = invvv(s)
-w = Coordinate.inv(Coordinate(s, CurveP256.ORDER), CurveP256.ORDER).coord
-
-u1 = (hh * w) % CurveP256.ORDER
-u2 = (r*w) % CurveP256.ORDER
-vA = ecdsa._multiply_k_p(u1, CurveP256.GENERATOR)
-vB = ecdsa._multiply_k_p(u2, keyPair.public)
-v = CurveP256.add(vA, vB).x.coord % CurveP256.ORDER
-print("v is: ", v)
-assert v == r
-
-print("\n\n10. My sign")
-ecdsa = ECDSA(CurveP256)
-keyPair = KeyPair(public=Point(Coordinate(0x60FED4BA255A9D31C961EB74C6356D68C049B8923B61FA6CE669622E60F29FB6, CurveP256.PRIME),
-                               Coordinate(0x7903FE1008B8BC99A41AE9E95628BC64F2F1B20C2D7E9F5177A3C294D4462299, CurveP256.PRIME)),
-                  private=0xC9AFA9D845BA75166B5C215767B1D6934E50C3DB36E89B127B8A622B120F6721)
-k = 0xA6E3C57DD01ABE90086538398355DD4C3B17AA873382B0F24D6129493D8AAD60
-r, s = ecdsa.sign(b'sample', keyPair.private, k)
-print(r, hex(s))
-
-ecdsa.verify(b'sample', keyPair.public, r, s)
+r, s = ecdsa.sign(b'sample', keyPair)
+good_sig = ecdsa.verify(b'sample', keyPair.public, r, s)
+assert good_sig == True
+print("PASS\n")
